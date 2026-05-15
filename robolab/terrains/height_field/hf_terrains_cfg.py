@@ -61,6 +61,12 @@ class PerlinInvertedPyramidStairsTerrainCfg(HfInvertedPyramidStairsTerrainCfg, W
 
 
 @configclass
+class PerlinInvertedPyramidStairsGroundAlignedTerrainCfg(HfInvertedPyramidStairsTerrainCfg, WallTerrainCfgMixin):
+    """Alias of :class:`PerlinInvertedPyramidStairsTerrainCfg` (same defaults since align_min_height defaults to True on the parent)."""
+    function = hf_terrains.perlin_pyramid_stairs_ground_aligned_terrain
+    perlin_cfg: PerlinPlaneTerrainCfg | None = None
+
+@configclass
 class PerlinDiscreteObstaclesTerrainCfg(HfDiscreteObstaclesTerrainCfg, WallTerrainCfgMixin):
     function = hf_terrains.perlin_discrete_obstacles_terrain
     perlin_cfg: PerlinPlaneTerrainCfg | None = None

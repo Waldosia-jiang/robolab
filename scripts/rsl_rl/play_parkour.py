@@ -10,7 +10,6 @@
 """Script to play parkour checkpoints (RSL-RL, AMP). ONNX export uses real observations."""
 
 import argparse
-import copy
 import os
 import sys
 import time
@@ -44,12 +43,6 @@ parser.add_argument(
     default=False,
     help="Export EncoderActorCritic policy as separate ONNX files (depth encoder(s) + actor).",
 )
-parser.add_argument(
-    "--useonnx",
-    action="store_true",
-    default=False,
-    help="Run inference with exported ONNX (requires prior --exportonnx run; onnxruntime).",
-)
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -65,7 +58,6 @@ simulation_app = app_launcher.app
 
 import gymnasium as gym
 import torch
-from tensordict import TensorDict
 
 from isaaclab.envs import (
     DirectMARLEnv,
@@ -76,97 +68,14 @@ from isaaclab.envs import (
 )
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
-from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
+from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 import isaaclab_tasks  # noqa: F401
 import robolab.tasks  # noqa: F401
 
-from rsl_rl.modules.actor_critic_encoder import EncoderActorCritic
 from rsl_rl.runners import AMPRunner, DistillationRunner, OnPolicyRunner
-
-
-def _export_encoder_actor_policy_onnx(
-    policy_nn: EncoderActorCritic, obs: TensorDict, export_dir: str, opset_version: int = 17
-) -> None:
-    """Export Conv2d encoders as ``{idx}-{name}.onnx`` and trunk actor as ``actor.onnx`` (normalized input)."""
-    os.makedirs(export_dir, exist_ok=True)
-    policy_nn.eval()
-    device = next(policy_nn.parameters()).device
-    with torch.no_grad():
-        group_obs = obs[policy_nn.actor_obs_group]
-        for idx, name in enumerate(policy_nn.actor_encoder_obs_groups):
-            enc = policy_nn.actor_encoders[name]
-            x = group_obs[name].cpu()
-            enc_cpu = copy.deepcopy(enc).cpu()
-            torch.onnx.export(
-                enc_cpu,
-                x,
-                os.path.join(export_dir, f"{idx}-{name}.onnx"),
-                export_params=True,
-                opset_version=opset_version,
-                input_names=["input"],
-                output_names=["output"],
-            )
-            print(f"[INFO]: Exported encoder ONNX: {idx}-{name}.onnx")
-        actor_pre = policy_nn.get_actor_obs(obs)
-        actor_in = policy_nn.actor_obs_normalizer(actor_pre).cpu()
-        actor_cpu = copy.deepcopy(policy_nn.actor).cpu()
-        torch.onnx.export(
-            actor_cpu,
-            actor_in,
-            os.path.join(export_dir, "actor.onnx"),
-            export_params=True,
-            opset_version=opset_version,
-            input_names=["input"],
-            output_names=["output"],
-        )
-        print("[INFO]: Exported actor ONNX: actor.onnx")
-    policy_nn.to(device)
-
-
-def _load_encoder_actor_onnx_policy(policy_nn: EncoderActorCritic, model_dir: str):
-    """ONNXRuntime policy with the same tensor layout as :meth:`EncoderActorCritic.get_actor_obs`."""
-    try:
-        import onnxruntime as ort
-    except ImportError as e:
-        raise ImportError("Install onnxruntime to use --useonnx.") from e
-
-    providers = ort.get_available_providers()
-    enc_sessions: dict[str, object] = {}
-    for idx, name in enumerate(policy_nn.actor_encoder_obs_groups):
-        path = os.path.join(model_dir, f"{idx}-{name}.onnx")
-        if not os.path.isfile(path):
-            raise FileNotFoundError(f"Missing encoder ONNX: {path}")
-        enc_sessions[name] = ort.InferenceSession(path, providers=providers)
-    actor_path = os.path.join(model_dir, "actor.onnx")
-    if not os.path.isfile(actor_path):
-        raise FileNotFoundError(f"Missing actor ONNX: {actor_path}")
-    actor_sess = ort.InferenceSession(actor_path, providers=providers)
-    actor_in_name = actor_sess.get_inputs()[0].name
-
-    def act_onnx(obs: TensorDict) -> torch.Tensor:
-        group_obs = obs[policy_nn.actor_obs_group]
-        ref = next(iter(group_obs.values()))
-        device, dtype = ref.device, ref.dtype
-        parts: list[torch.Tensor] = []
-        for _cname, cobs in group_obs.items():
-            if _cname not in policy_nn.actor_encoder_obs_groups:
-                parts.append(cobs)
-        for name in policy_nn.actor_encoder_obs_groups:
-            sess = enc_sessions[name]
-            in_name = sess.get_inputs()[0].name
-            x_np = group_obs[name].detach().cpu().numpy()
-            y_np = sess.run(None, {in_name: x_np})[0]
-            parts.append(torch.from_numpy(y_np).to(device=device, dtype=dtype))
-        actor_pre = torch.cat(parts, dim=-1)
-        actor_in = policy_nn.actor_obs_normalizer(actor_pre)
-        out_np = actor_sess.run(None, {actor_in_name: actor_in.detach().cpu().numpy()})[0]
-        return torch.from_numpy(out_np).to(device=device, dtype=dtype)
-
-    return act_onnx
-
 
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
@@ -222,36 +131,22 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     except AttributeError:
         policy_nn = runner.alg.actor_critic
 
-    if hasattr(policy_nn, "actor_obs_normalizer"):
-        normalizer = policy_nn.actor_obs_normalizer
-    elif hasattr(policy_nn, "student_obs_normalizer"):
-        normalizer = policy_nn.student_obs_normalizer
-    else:
-        normalizer = None
-
-    obs = env.get_observations()
-    export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-
-    if isinstance(policy_nn, EncoderActorCritic):
-        if args_cli.exportonnx:
-            if env.unwrapped.num_envs != 1:
-                raise RuntimeError("Exporting parkour ONNX requires num_envs == 1 (--num_envs 1).")
-            _export_encoder_actor_policy_onnx(policy_nn, obs, export_model_dir)
-        elif not args_cli.useonnx:
-            print(
-                "[INFO]: EncoderActorCritic: skipping flat JIT/ONNX "
-                "(encoder outputs are not included in the default exporter; use --exportonnx)."
+    export_model_dir = os.path.join(log_dir, "exported")
+    # export policy to onnx (separate encoder + actor graphs when policy implements export_as_onnx)
+    if agent_cfg.load_run is not None and args_cli.exportonnx:
+        assert env.unwrapped.num_envs == 1, "Exporting to ONNX is only supported for single environment."
+        if not hasattr(policy_nn, "export_as_onnx"):
+            raise AttributeError(
+                "export_as_onnx is missing on the policy module; use EncoderActorCritic / EncoderMoEActorCritic "
+                "for parkour ONNX export."
             )
+        os.makedirs(export_model_dir, exist_ok=True)
+        obs = env.get_observations()
+        policy_nn.export_as_onnx(obs, export_model_dir)
     else:
-        export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
-        export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
+        obs = env.get_observations()
 
     policy = torch_policy
-    if args_cli.useonnx:
-        if not isinstance(policy_nn, EncoderActorCritic):
-            raise RuntimeError("--useonnx is only implemented for EncoderActorCritic (parkour encoder + trunk).")
-        policy = _load_encoder_actor_onnx_policy(policy_nn, export_model_dir)
-
     dt = env.unwrapped.step_dt
     timestep = 0
     while simulation_app.is_running():

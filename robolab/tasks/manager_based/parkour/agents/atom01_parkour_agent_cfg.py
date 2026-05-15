@@ -33,6 +33,9 @@ class RslRlPpoEncoderMoEActorCriticCfg:
         "nonlinearity": "ReLU",
         "use_maxpool": True,
     }
+    # ONNX export: match instinct_onboard / instinctlab onnxer (`0-depth_encoder.onnx`).
+    encoder_onnx_stems: dict[str, str] = {"depth_image": "depth_encoder"}
+    encoder_onnx_sequential_idx: int = 0
 
 
 @configclass

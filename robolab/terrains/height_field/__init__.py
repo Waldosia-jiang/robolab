@@ -3,6 +3,7 @@ from .hf_terrains_cfg import (
     PerlinDiscreteObstaclesTerrainCfg,
     PerlinGutterTerrainCfg,
     PerlinInvertedPyramidSlopedTerrainCfg,
+    PerlinInvertedPyramidStairsGroundAlignedTerrainCfg,
     PerlinInvertedPyramidStairsTerrainCfg,
     PerlinParapetTerrainCfg,
     PerlinPlaneTerrainCfg,
