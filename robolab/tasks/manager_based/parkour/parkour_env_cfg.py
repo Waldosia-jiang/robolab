@@ -498,7 +498,7 @@ class ParkourRewardsCfg:
     dont_wait = RewTerm(func=mdp.dont_wait, weight=-0.5, params={"command_name": "base_velocity"})
     is_alive = RewTerm(func=mdp.is_alive, weight=3.0)
     # stand_still = RewTerm(func=mdp.stand_still, weight=-1.0, params={"command_name": "base_velocity", "offset": 1.0})
-    stand_still = RewTerm(func=mdp.stand_still, weight=-1.0, params={"command_name": "base_velocity"})
+    # stand_still = RewTerm(func=mdp.stand_still, weight=-1.0, params={"command_name": "base_velocity"})
 
     # Regularization rewards
     volume_points_penetration_feet = RewTerm(
@@ -533,16 +533,16 @@ class ParkourRewardsCfg:
             "threshold": 1.0,
         },
     )
-    joint_deviation_upper_body = RewTerm(
-        func=mdp.joint_deviation_l1,
-        weight=-0.1,
-        params={
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                joint_names=[".*_arm_.*_joint", ".*_elbow_.*_joint", "torso_joint"],
-            )
-        },
-    )
+    # joint_deviation_upper_body = RewTerm(
+    #     func=mdp.joint_deviation_l1,
+    #     weight=-0.1,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg(
+    #             "robot",
+    #             joint_names=[".*_arm_.*_joint", ".*_elbow_.*_joint", "torso_joint"],
+    #         )
+    #     },
+    # )
     # joint_deviation_upper_elbow = RewTerm(
     #     func=mdp.joint_deviation_l1,
     #     weight=-10.0,
@@ -562,8 +562,8 @@ class ParkourRewardsCfg:
     #         ),
     #     },
     # )
-    left_thigh_yaw_joint_sign = RewTerm(func=mdp.left_thigh_yaw_joint_sign_l1, weight=-1.0)
-    right_thigh_yaw_joint_sign = RewTerm(func=mdp.right_thigh_yaw_joint_sign_l1, weight=-1.0)
+    # left_thigh_yaw_joint_sign = RewTerm(func=mdp.left_thigh_yaw_joint_sign_l1, weight=-1.0)
+    # right_thigh_yaw_joint_sign = RewTerm(func=mdp.right_thigh_yaw_joint_sign_l1, weight=-1.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.1)
     dof_torques_l2 = RewTerm(
         func=mdp.joint_torques_l2,
@@ -714,7 +714,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=["torso_link", "base_link"]),
-            "com_range": {"x": (-0.02, 0.02), "y": (-0.02, 0.02), "z": (-0.02, 0.02)}, # 0.02
+            "com_range": {"x": (-0.02, 0.02), "y": (-0.02, 0.02), "z": (-0.02, 0.02)},
         },
     )
     
@@ -821,7 +821,7 @@ class EventCfg:
         
     randomize_camera_offset = EventTerm(
         func=mdp.randomize_camera_offsets,
-        mode="startup",  # 或 "reset"
+        mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("camera"),
             "offset_pose_ranges": {
