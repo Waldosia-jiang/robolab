@@ -112,7 +112,7 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
 """Rest everything follows."""
 
 import logging
-import time
+import re
 from datetime import datetime
 
 import torch
@@ -133,7 +133,6 @@ from isaaclab.utils.io import dump_yaml
 from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, handle_deprecated_rsl_rl_cfg
 
 import isaaclab_tasks  # noqa: F401
-from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 logger = logging.getLogger(__name__)
@@ -145,6 +144,72 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
+
+
+def get_resume_checkpoint_path(log_path: str, run_dir: str, checkpoint: str) -> str:
+    """Find the latest checkpoint, skipping empty run directories."""
+    runs = [
+        os.path.join(log_path, run.name)
+        for run in os.scandir(log_path)
+        if run.is_dir() and re.match(run_dir, run.name)
+    ]
+    if not runs:
+        raise ValueError(f"No runs present in the directory: '{log_path}' match: '{run_dir}'.")
+    runs.sort()
+    for run_path in reversed(runs):
+        model_checkpoints = [f for f in os.listdir(run_path) if re.match(checkpoint, f)]
+        if model_checkpoints:
+            model_checkpoints.sort(key=lambda m: f"{m:0>15}")
+            return os.path.join(run_path, model_checkpoints[-1])
+    raise ValueError(f"No checkpoints in the directory: '{log_path}' match '{checkpoint}'.")
+
+
+def _init_process_group_if_needed() -> None:
+    """Initialize torch distributed once when launched via torchrun."""
+    world_size = int(os.getenv("WORLD_SIZE", "1"))
+    if world_size <= 1 or torch.distributed.is_initialized():
+        return
+    torch.distributed.init_process_group(backend="nccl")
+    torch.cuda.set_device(int(os.getenv("LOCAL_RANK", "0")))
+
+
+def _broadcast_log_run_name(log_run_name: str, global_rank: int) -> str:
+    """Broadcast the log run name from rank 0 to every distributed worker."""
+    _init_process_group_if_needed()
+    payload = [log_run_name if global_rank == 0 else ""]
+    torch.distributed.broadcast_object_list(payload, src=0)
+    return payload[0]
+
+
+def _resolve_log_dir(
+    log_root_path: str,
+    *,
+    resume: bool,
+    load_run: str,
+    load_checkpoint: str,
+    run_name: str | None,
+    distributed: bool,
+    global_rank: int,
+) -> tuple[str, str | None]:
+    """Resolve the log directory and optional checkpoint path for this run."""
+    os.makedirs(log_root_path, exist_ok=True)
+
+    if resume:
+        resume_path = get_resume_checkpoint_path(log_root_path, load_run, load_checkpoint)
+        log_dir = os.path.dirname(resume_path)
+        print(f"[INFO] Resuming training in log directory: {log_dir}")
+        return log_dir, resume_path
+
+    log_run_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    if run_name:
+        log_run_name += f"_{run_name}"
+    if distributed:
+        log_run_name = _broadcast_log_run_name(log_run_name, global_rank)
+    # The Ray Tune workflow extracts experiment name using the logging line below, hence, do not change it (see PR #2346, comment-2819298849)
+    print(f"Exact experiment name requested from command line: {log_run_name}")
+    log_dir = os.path.join(log_root_path, log_run_name)
+    os.makedirs(log_dir, exist_ok=True)
+    return log_dir, None
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -192,32 +257,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Logging experiment in directory: {log_root_path}")
-    # specify directory for logging runs: {time-stamp}_{run_name}
-    if args_cli.distributed:
-        os.makedirs(log_root_path, exist_ok=True)
-        sync_file = os.path.join(log_root_path, ".latest_log_dir")
-        if app_launcher.global_rank == 0:
-            log_run_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            if agent_cfg.run_name:
-                log_run_name += f"_{agent_cfg.run_name}"
-            # The Ray Tune workflow extracts experiment name using the logging line below, hence, do not change it (see PR #2346, comment-2819298849)
-            print(f"Exact experiment name requested from command line: {log_run_name}")
-            with open(sync_file, "w") as f:
-                f.write(log_run_name)
-        else:
-            while not os.path.exists(sync_file):
-                time.sleep(0.05)
-            with open(sync_file) as f:
-                log_run_name = f.read().strip()
-        log_dir = os.path.join(log_root_path, log_run_name)
-        os.makedirs(log_dir, exist_ok=True)
-    else:
-        log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        # The Ray Tune workflow extracts experiment name using the logging line below, hence, do not change it (see PR #2346, comment-2819298849)
-        print(f"Exact experiment name requested from command line: {log_dir}")
-        if agent_cfg.run_name:
-            log_dir += f"_{agent_cfg.run_name}"
-        log_dir = os.path.join(log_root_path, log_dir)
+
+    should_resume = agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation"
+    log_dir, resume_path = _resolve_log_dir(
+        log_root_path,
+        resume=should_resume,
+        load_run=agent_cfg.load_run,
+        load_checkpoint=agent_cfg.load_checkpoint,
+        run_name=agent_cfg.run_name or None,
+        distributed=args_cli.distributed,
+        global_rank=app_launcher.global_rank,
+    )
 
     # set the IO descriptors output directory if requested
     if isinstance(env_cfg, ManagerBasedRLEnvCfg):
@@ -236,10 +286,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
-
-    # save resume path before creating a new log_dir
-    if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     # wrap for video recording
     if args_cli.video:

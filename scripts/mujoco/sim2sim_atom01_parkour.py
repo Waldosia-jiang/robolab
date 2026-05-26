@@ -90,6 +90,9 @@ _CHASE_BACK_M = 2.0
 _CHASE_UP_M = 0.6
 _CHASE_LOOK_AHEAD_M = 0.8
 _CHASE_BODY_NAME = "base_link"
+_SPEED_LIMIT_X = 0.8
+_SPEED_LIMIT_Y = 0.0
+_SPEED_LIMIT_Z = 1.0
 
 def mj_macro_step(model: mujoco.MjModel, data: mujoco.MjData, *, n_sub: int) -> None:
     """Advance simulation by one *policy* sub-step duration (``cfg.dt``) using ``n_sub`` MuJoCo steps."""
@@ -180,9 +183,9 @@ class cmd:
     _pressed: ClassVar[set[str]] = set()
 
     # Magnitude while the corresponding key is held (opposing keys cancel).
-    hold_vx = 0.4
-    hold_vy = 0.0
-    hold_dyaw = 1.0
+    hold_vx = _SPEED_LIMIT_X
+    hold_vy = _SPEED_LIMIT_Y
+    hold_dyaw = _SPEED_LIMIT_Z
 
     # Max |d(command)/dt| when moving toward keyboard target (linear ramp; units/s).
     ramp_vx_per_s = 2.0

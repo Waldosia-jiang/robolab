@@ -173,37 +173,16 @@ def feet_close_xy_gauss(
 def sound_suppression_acc_per_foot(
     env: ManagerBasedRLEnv,
     sensor_cfg: SceneEntityCfg,
-    command_name: str = "base_velocity",
 ) -> torch.Tensor:
-    """
-    Compute per-foot acceleration penalty for sound suppression.
-
-    Penalize large vertical (z) accelerations when a foot is in contact with the ground.
-    """
-
+    """Penalize vertical foot velocity and acceleration during ground contact."""
     asset = env.scene["robot"]
-
-    # shape: (Nenv, Nbody, 6)
-    body_acc = asset.data.body_acc_w
-
-    # shape: (Nenv, Nfeet)
-    foot_acc_z = body_acc[:, sensor_cfg.body_ids, 2]
-
-    contact_sensor = env.scene.sensors[sensor_cfg.name]
-    contact_force_z = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, 2]
-    in_contact = torch.abs(contact_force_z) > 1.0  # (Nenv, Nfeet)
-
-    acc_penalty = (foot_acc_z ** 2) * in_contact.float()
-    acc_penalty = torch.clamp(acc_penalty, max=50.0)
-
-    penalty = acc_penalty.sum(dim=1)
-    reward = penalty
-
-    cmd = env.command_manager.get_command(command_name)
-    cmd_speed = torch.norm(cmd[:, :2], dim=1)
-    reward = reward * (cmd_speed < 1.5).float()
-
-    return reward
+    body_ids = sensor_cfg.body_ids
+    foot_vel_z = asset.data.body_vel_w[:, body_ids, 2]
+    foot_acc_z = asset.data.body_acc_w[:, body_ids, 2]
+    contact_force_z = env.scene.sensors[sensor_cfg.name].data.net_forces_w[:, body_ids, 2]
+    in_contact = torch.abs(contact_force_z) > 0.0
+    penalty = ((foot_vel_z.square() + foot_acc_z.square()) * in_contact.float()).sum(dim=1)
+    return penalty
 
 def heading_error(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     """Compute the heading error between the robot's current heading and the goal heading."""
@@ -342,6 +321,41 @@ def volume_points_penetration(
 
     return torch.sum(velocity_times_penetration, dim=-1)
 
+def volume_points_penetration_weighted_by_distance(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    tolerance: float = 0.0,
+    center_sigma: float | None = None,
+) -> torch.Tensor:
+    """Penalize the penetration of volume points into the environment."""
+    # extract the used quantities (to enable type-hinting)
+    volume_sensor: VolumePoints = env.scene.sensors[sensor_cfg.name]
+    # compute the reward
+    penetration = volume_sensor.data.penetration_offset  # (N, B_, P_, 3) where B_ and P_ varies in sensors
+    penetration = penetration.flatten(1, 2)  # (N, B_*P_, 3)
+    penetration_depth = torch.norm(penetration, dim=-1)  # (N, B_*P_)
+    in_obstacle = (penetration_depth > tolerance).float()  # (N, B_*P_)
+    points_vel = volume_sensor.data.points_vel_w  # (N, B_, P_, 3) where B_ and P_ varies in sensors
+    points_vel = points_vel.flatten(1, 2)  # (N, B_*P_, 3)
+    points_vel_norm = torch.norm(points_vel, dim=-1)  # (N, B_*P_)
+    velocity_times_penetration = in_obstacle * (points_vel_norm + 1e-6) * penetration_depth  # (N, B_*P_)
+
+    if center_sigma is not None:
+        grid_cfg = volume_sensor.cfg.points_generator
+        local_xy = grid3d_points_generator(grid_cfg).to(volume_sensor.device)[:, :2]
+        center = torch.tensor(
+            [0.5 * (grid_cfg.x_min + grid_cfg.x_max), 0.5 * (grid_cfg.y_min + grid_cfg.y_max)],
+            device=volume_sensor.device,
+            dtype=local_xy.dtype,
+        )
+        num_envs, num_bodies = penetration_depth.shape[0], volume_sensor.num_bodies
+        local_xy = local_xy.unsqueeze(0).unsqueeze(0).expand(num_envs, num_bodies, -1, -1)
+        local_xy = local_xy.reshape(num_envs, num_bodies * local_xy.shape[2], 2)
+        dist_xy = torch.norm(local_xy - center, dim=-1)
+        # Keep edge penalty unchanged (weight=1), add extra penalty near sole center (weight up to 2).
+        velocity_times_penetration *= 1.0 + torch.exp(-(dist_xy**2) / (2.0 * center_sigma**2))
+
+    return torch.sum(velocity_times_penetration, dim=-1)
 
 def step_safety(
     env: ManagerBasedRLEnv,
@@ -436,142 +450,11 @@ def applied_torque_limits_by_ratio(
 
     return out_of_limits_err
 
-"""
-Actor MLP: MoeLayer(
-  (act_fn): ELU(alpha=1.0)
-  (gate): Sequential(
-    (0): Linear(in_features=752, out_features=10, bias=True)
-  )
-  (experts): ModuleList(
-    (0-9): 10 x Sequential(
-      (0): Linear(in_features=752, out_features=256, bias=True)
-      (1): ELU(alpha=1.0)
-      (2): Linear(in_features=256, out_features=128, bias=True)
-      (3): ELU(alpha=1.0)
-      (4): Linear(in_features=128, out_features=64, bias=True)
-      (5): ELU(alpha=1.0)
-      (6): Linear(in_features=64, out_features=23, bias=True)
-    )
-  )
-)
-Critic MLP: MoeLayer(
-  (act_fn): ELU(alpha=1.0)
-  (gate): Sequential(
-    (0): Linear(in_features=1304, out_features=10, bias=True)
-  )
-  (experts): ModuleList(
-    (0-9): 10 x Sequential(
-      (0): Linear(in_features=1304, out_features=256, bias=True)
-      (1): ELU(alpha=1.0)
-      (2): Linear(in_features=256, out_features=128, bias=True)
-      (3): ELU(alpha=1.0)
-      (4): Linear(in_features=128, out_features=64, bias=True)
-      (5): ELU(alpha=1.0)
-      (6): Linear(in_features=64, out_features=1, bias=True)
-    )
-  )
-)
-Actor Encoder: ParallelLayer(1 blocks): ModuleDict(
-  (depth_encoder): Conv2dHeadModel(
-    (conv): Conv2dModel(
-      (conv): Sequential(
-        (0): Conv2d(8, 4, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (1): ReLU()
-      )
-    )
-    (head): MlpModel(
-      (model): Sequential(
-        (0): Linear(in_features=2304, out_features=256, bias=True)
-        (1): ReLU()
-        (2): Linear(in_features=256, out_features=256, bias=True)
-        (3): ReLU()
-        (4): Linear(in_features=256, out_features=128, bias=True)
-        (5): ReLU()
-      )
-    )
-  )
-)
-Critic Encoder: ParallelLayer(1 blocks): ModuleDict(
-  (depth_encoder): Conv2dHeadModel(
-    (conv): Conv2dModel(
-      (conv): Sequential(
-        (0): Conv2d(8, 4, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (1): ReLU()
-      )
-    )
-    (head): MlpModel(
-      (model): Sequential(
-        (0): Linear(in_features=2304, out_features=256, bias=True)
-        (1): ReLU()
-        (2): Linear(in_features=256, out_features=256, bias=True)
-        (3): ReLU()
-        (4): Linear(in_features=256, out_features=128, bias=True)
-        (5): ReLU()
-      )
-    )
-  )
-)
-Discriminator Network Structure: Discriminator(
-  (model): MlpModel(
-    (model): Sequential(
-      (0): Linear(in_features=550, out_features=1024, bias=True)
-      (1): ReLU()
-      (2): Linear(in_features=1024, out_features=512, bias=True)
-      (3): ReLU()
-      (4): Linear(in_features=512, out_features=1, bias=True)
-    )
-  )
-)
-
-+-------------------------------------------------+
-|   Active Observation Terms in Group: 'policy'   |
-+--------+--------------------+-------------------+
-| Index  | Name               |       Shape       |
-+--------+--------------------+-------------------+
-|   0    | base_ang_vel       |  (np.int64(24),)  |
-|   1    | projected_gravity  |  (np.int64(24),)  |
-|   2    | velocity_commands  |  (np.int64(24),)  |
-|   3    | joint_pos          |  (np.int64(184),) |
-|   4    | joint_vel          |  (np.int64(184),) |
-|   5    | actions            |  (np.int64(184),) |
-|   6    | depth_image        |    (8, 18, 32)    |
-+--------+--------------------+-------------------+
-+-------------------------------------------------+
-|   Active Observation Terms in Group: 'critic'   |
-+--------+--------------------+-------------------+
-| Index  | Name               |       Shape       |
-+--------+--------------------+-------------------+
-|   0    | base_lin_vel       |  (np.int64(24),)  |
-|   1    | base_ang_vel       |  (np.int64(24),)  |
-|   2    | projected_gravity  |  (np.int64(24),)  |
-|   3    | velocity_commands  |  (np.int64(24),)  |
-|   4    | joint_pos          |  (np.int64(184),) |
-|   5    | joint_vel          |  (np.int64(184),) |
-|   6    | actions            |  (np.int64(184),) |
-|   7    | depth_image        |    (8, 18, 32)    |
-|   8    | height_scan        |  (np.int64(528),) |
-+--------+--------------------+-------------------+
-+---------------------------------------------------+
-|  Active Observation Terms in Group: 'amp_policy'  |
-+--------+---------------------+--------------------+
-| Index  | Name                |       Shape        |
-+--------+---------------------+--------------------+
-|   0    | projected_gravity   |  (np.int64(30),)   |
-|   1    | joint_pos_rel       |  (np.int64(230),)  |
-|   2    | joint_vel           |  (np.int64(230),)  |
-|   3    | base_lin_vel        |  (np.int64(30),)   |
-|   4    | base_ang_vel        |  (np.int64(30),)   |
-+--------+---------------------+--------------------+
-+-----------------------------------------------------+
-|  Active Observation Terms in Group: 'amp_reference' |
-+--------+----------------------+---------------------+
-| Index  | Name                 |        Shape        |
-+--------+----------------------+---------------------+
-|   0    | projected_gravity    |   (np.int64(30),)   |
-|   1    | joint_pos_rel        |   (np.int64(230),)  |
-|   2    | joint_vel            |   (np.int64(230),)  |
-|   3    | base_lin_vel         |   (np.int64(30),)   |
-|   4    | base_ang_vel         |   (np.int64(30),)   |
-+--------+----------------------+---------------------+
-
-"""
+def base_vel_z_penalty(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize the downward velocity of the base."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    base_vel_z = asset.data.root_lin_vel_b[:, 2]
+    return torch.square(base_vel_z)
