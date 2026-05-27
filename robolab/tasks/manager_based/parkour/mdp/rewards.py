@@ -321,41 +321,6 @@ def volume_points_penetration(
 
     return torch.sum(velocity_times_penetration, dim=-1)
 
-def volume_points_penetration_weighted_by_distance(
-    env: ManagerBasedRLEnv,
-    sensor_cfg: SceneEntityCfg,
-    tolerance: float = 0.0,
-    center_sigma: float | None = None,
-) -> torch.Tensor:
-    """Penalize the penetration of volume points into the environment."""
-    # extract the used quantities (to enable type-hinting)
-    volume_sensor: VolumePoints = env.scene.sensors[sensor_cfg.name]
-    # compute the reward
-    penetration = volume_sensor.data.penetration_offset  # (N, B_, P_, 3) where B_ and P_ varies in sensors
-    penetration = penetration.flatten(1, 2)  # (N, B_*P_, 3)
-    penetration_depth = torch.norm(penetration, dim=-1)  # (N, B_*P_)
-    in_obstacle = (penetration_depth > tolerance).float()  # (N, B_*P_)
-    points_vel = volume_sensor.data.points_vel_w  # (N, B_, P_, 3) where B_ and P_ varies in sensors
-    points_vel = points_vel.flatten(1, 2)  # (N, B_*P_, 3)
-    points_vel_norm = torch.norm(points_vel, dim=-1)  # (N, B_*P_)
-    velocity_times_penetration = in_obstacle * (points_vel_norm + 1e-6) * penetration_depth  # (N, B_*P_)
-
-    if center_sigma is not None:
-        grid_cfg = volume_sensor.cfg.points_generator
-        local_xy = grid3d_points_generator(grid_cfg).to(volume_sensor.device)[:, :2]
-        center = torch.tensor(
-            [0.5 * (grid_cfg.x_min + grid_cfg.x_max), 0.5 * (grid_cfg.y_min + grid_cfg.y_max)],
-            device=volume_sensor.device,
-            dtype=local_xy.dtype,
-        )
-        num_envs, num_bodies = penetration_depth.shape[0], volume_sensor.num_bodies
-        local_xy = local_xy.unsqueeze(0).unsqueeze(0).expand(num_envs, num_bodies, -1, -1)
-        local_xy = local_xy.reshape(num_envs, num_bodies * local_xy.shape[2], 2)
-        dist_xy = torch.norm(local_xy - center, dim=-1)
-        # Keep edge penalty unchanged (weight=1), add extra penalty near sole center (weight up to 2).
-        velocity_times_penetration *= 1.0 + torch.exp(-(dist_xy**2) / (2.0 * center_sigma**2))
-
-    return torch.sum(velocity_times_penetration, dim=-1)
 
 def step_safety(
     env: ManagerBasedRLEnv,
@@ -449,12 +414,3 @@ def applied_torque_limits_by_ratio(
     out_of_limits_err = torch.sum(torch.square(out_of_limits), dim=-1)  # (num_envs,)
 
     return out_of_limits_err
-
-def base_vel_z_penalty(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-) -> torch.Tensor:
-    """Penalize the downward velocity of the base."""
-    asset: RigidObject = env.scene[asset_cfg.name]
-    base_vel_z = asset.data.root_lin_vel_b[:, 2]
-    return torch.square(base_vel_z)

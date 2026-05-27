@@ -96,7 +96,7 @@ class SceneCfg(InteractiveSceneCfg):
         debug_vis=False,
         virtual_obstacles={
             "edges": GreedyconcatEdgeCylinderCfg(
-                cylinder_radius=0.02,
+                cylinder_radius=0.03,
                 min_points=2,
             ),
         },
@@ -498,20 +498,19 @@ class ParkourRewardsCfg:
     dont_wait = RewTerm(func=mdp.dont_wait, weight=-0.5, params={"command_name": "base_velocity"})
     is_alive = RewTerm(func=mdp.is_alive, weight=3.0)
     # stand_still = RewTerm(func=mdp.stand_still, weight=-1.0, params={"command_name": "base_velocity"})
-    base_vel_z_penalty = RewTerm(func=mdp.base_vel_z_penalty, weight=-5.0)
+    lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-5.0)
 
     # Regularization rewards
     volume_points_penetration_feet = RewTerm(
-        func=mdp.volume_points_penetration_weighted_by_distance,
-        weight=-10.0,
+        func=mdp.volume_points_penetration,
+        weight=-1.0,
         params={
             "sensor_cfg": SceneEntityCfg("leg_volume_points"),
-            "center_sigma": 0.03,
         },
     )
     volume_points_penetration_knee = RewTerm(
-        func=mdp.volume_points_penetration_weighted_by_distance,
-        weight=-10.0,
+        func=mdp.volume_points_penetration,
+        weight=-1.0,
         params={
             "sensor_cfg": SceneEntityCfg("knee_volume_points"),
         },
@@ -829,30 +828,30 @@ class CurriculumCfg:
     terrain_levels = CurrTerm(
         func=mdp.tracking_exp_vel,
         params={
-            "lin_vel_threshold": (0.4, 0.8),
-            "ang_vel_threshold": (0.0, 0.0),
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.7, 0.8),
         },
     )
     volume_points_penetration_weight_feet = CurrTerm(
         func=mdp.modify_rewards_weight,
         params={
             "term_name": "volume_points_penetration_feet",
-            "init_weight": -10.0,
+            "init_weight": -1.0,
             "final_weight": -100.0,
-            "lin_vel_threshold": (0.4, 0.8),
-            "ang_vel_threshold": (0.0, 0.0),
-            "step_size": 0.1,
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.7, 0.8),
+            "step_size": 0.01,
         },
     )
     volume_points_penetration_weight_knee = CurrTerm(
         func=mdp.modify_rewards_weight,
         params={
             "term_name": "volume_points_penetration_knee",
-            "init_weight": -10.0,
+            "init_weight": -1.0,
             "final_weight": -100.0,
-            "lin_vel_threshold": (0.4, 0.8),
-            "ang_vel_threshold": (0.0, 0.0),
-            "step_size": 0.1,
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.7, 0.8),
+            "step_size": 0.01,
         },
     )
     feet_stumble_weight = CurrTerm(
@@ -861,9 +860,9 @@ class CurriculumCfg:
             "term_name": "feet_stumble",
             "init_weight": -1.0,
             "final_weight": -10.0,
-            "lin_vel_threshold": (0.4, 0.8),
-            "ang_vel_threshold": (0.0, 0.0),
-            "step_size": 0.1,
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.7, 0.8),
+            "step_size": 0.01,
         },
     )
     undesired_contacts_weight = CurrTerm(
@@ -872,9 +871,9 @@ class CurriculumCfg:
             "term_name": "undesired_contacts",
             "init_weight": -1.0,
             "final_weight": -10.0,
-            "lin_vel_threshold": (0.4, 0.8),
-            "ang_vel_threshold": (0.0, 0.0),
-            "step_size": 0.1,
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.7, 0.8),
+            "step_size": 0.01,
         },
     )
 
