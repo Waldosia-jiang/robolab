@@ -45,5 +45,7 @@ setup(
         "pynput",
         "opencv-python",
         "onnxruntime-gpu",
+        "pyvista",
+        "scikit-learn",
     ],
 )

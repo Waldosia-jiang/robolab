@@ -161,7 +161,7 @@ class RPOAmpEnvCfg(AmpEnvCfg):
             "B10_-__Walk_turn_left_45_stageii":1,
             "B13_-__Walk_turn_right_90_stageii":1,
             "B14_-__Walk_turn_right_45_t2_stageii":1,
-            "B15_-__Walk_turn_around_stageii_walk":1,
+            "B15_-__Walk_turn_around_stageii":1,
             
             "C12_-_run_turn_left_45_stageii":1,
             "C17_-_run_change_direction_stageii":1,

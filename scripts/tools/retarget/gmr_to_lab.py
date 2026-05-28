@@ -58,9 +58,8 @@ Output Isaac Lab Format:
 """
 
 
-import joblib
-import numpy as np
 import pickle
+import numpy as np
 import enum
 import torch
 
@@ -88,7 +87,7 @@ def extract_gmr_data(
     end_frame: int = -1,
 ):
     with open(gmr_file_path, 'rb') as f:
-        gmr_data = joblib.load(f)
+        gmr_data = pickle.load(f)
         
     # Extract data from GMR format
     fps = gmr_data['fps']
@@ -132,7 +131,7 @@ def extract_gmr_data(
 
     dof_pos_lab = dof_pos[:, gmr_to_lab_indices]
 
-    # set the elbow yaw joint to 0.0, actually these joints do not need to do action for rpo
+    # set the elbow yaw joint to 0.0, actually these joints do not need to do action for atom01
     for i, lab_dof in enumerate(lab_dof_names):
         if lab_dof.endswith("_elbow_yaw_joint"):
             dof_pos_lab[:, i] = 0.0
