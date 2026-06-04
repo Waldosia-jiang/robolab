@@ -90,32 +90,33 @@ class cmd:
 def on_press(key):
     """Key press event handler"""
     try:
-        # Number key controls: 8/5 control forward/backward (vx), 4/6 control left/right (vy), 7/9 control left/right turn (dyaw)
-        if hasattr(key, 'char') and key.char is not None:
+        # Arrow keys (main keyboard)
+        if key == keyboard.Key.up:
+            cmd.update_vx(cmd.vx_increment)
+        elif key == keyboard.Key.down:
+            cmd.update_vx(-cmd.vx_increment)
+        elif key == keyboard.Key.left:
+            cmd.update_dyaw(cmd.dyaw_increment)
+        elif key == keyboard.Key.right:
+            cmd.update_dyaw(-cmd.dyaw_increment)
+        # Numpad / number row: 8/2 vx, 4/6 vy, 7/9 dyaw
+        elif hasattr(key, 'char') and key.char is not None:
             c = key.char.lower()
             if c == '8':
-                # 8 -> forward (increase vx)
                 cmd.update_vx(cmd.vx_increment)
             elif c == '2':
-                # 2 -> backward (decrease vx)
                 cmd.update_vx(-cmd.vx_increment)
             elif c == '4':
-                # 4 -> left (decrease vy)
                 cmd.update_vy(cmd.vy_increment)
             elif c == '6':
-                # 6 -> right (increase vy)
                 cmd.update_vy(-cmd.vy_increment)
             elif c == '7':
-                # 7 -> turn left (increase dyaw)
                 cmd.update_dyaw(cmd.dyaw_increment)
             elif c == '9':
-                # 9 -> turn right (decrease dyaw)
                 cmd.update_dyaw(-cmd.dyaw_increment)
             elif c == 'f':
-                # toggle camera follow
                 cmd.toggle_camera_follow()
             elif c == '0':
-                # request reset robot state in main loop (thread-safe flag)
                 cmd.reset_requested = True
                 print('Reset requested (0 key pressed)')
     except AttributeError:
@@ -163,13 +164,12 @@ def run_mujoco(policy, cfg, headless=False):
     """
     # Start keyboard listener
     print("=" * 60)
-    print("Keyboard control instructions:")
-    print("  ↑ Up arrow: Increase forward speed (vx)")
-    print("  ↓ Down arrow: Decrease forward speed (vx)")
-    print("  ← Left arrow: Increase left turn rate (dyaw)")
-    print("  → Right arrow: Increase right turn rate (dyaw)")
-    print("  0 key: Reset all speeds to 0")
-    print("  F key: Toggle camera follow mode")
+    print("Keyboard control instructions (focus terminal if keys seem dead):")
+    print("  ↑/↓ arrows or 8/2: forward / backward (vx)")
+    print("  ←/→ arrows or 7/9: turn left / right (dyaw)")
+    print("  4/6: strafe left / right (vy)")
+    print("  0: reset robot pose and zero commands")
+    print("  F: toggle camera follow")
     print("=" * 60)
     keyboard_listener = start_keyboard_listener()
     

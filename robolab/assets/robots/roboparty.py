@@ -32,6 +32,7 @@
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import DelayedPDActuatorCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
 from robolab.assets import ISAAC_DATA_DIR
@@ -185,7 +186,7 @@ RPO_LINKS = [
 
 V1_1_0321_CFG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
-        asset_path=f"{ISAAC_DATA_DIR}/v1_1_29dof/urdf/v1.1_u3.0_0303_v0_29dof_rectified2.urdf",
+        asset_path=f"{ISAAC_DATA_DIR}/robots/roboparty/v1_1_29dof/urdf/v1.1_u3.0_0303_v0_29dof_rectified2.urdf",
         fix_base=False,
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
