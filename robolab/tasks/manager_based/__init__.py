@@ -35,3 +35,4 @@ Manager-based tasks.
 
 from .amp import *
 from .parkour import *
+from .v1_1_29dof_amp import *

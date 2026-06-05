@@ -30,3 +30,4 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from .roboparty import *
+from .v1_1_29dof import *     # 新增一行 export

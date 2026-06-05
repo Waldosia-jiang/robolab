@@ -109,6 +109,8 @@ from isaaclab.scene import InteractiveScene
 # load robot cfg as single_retarget does
 if args_cli.robot == "rpo":
     from robolab.assets.robots.roboparty import RPO_CFG as ROBOT_CFG
+elif args_cli.robot == "v1_1_29dof":
+    from robolab.assets.robots.v1_1_29dof import V1_1_29DOF_CFG as ROBOT_CFG
 else:
     raise ValueError(f"Robot {args_cli.robot} not supported.")
 

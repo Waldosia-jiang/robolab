@@ -108,7 +108,7 @@ parser.add_argument(
     "--robot", 
     type=str,
     default="rpo",
-    choices=["rpo"],
+    choices=["rpo", "v1_1_29dof"],
     help="The robot name to be used.",
 )
 parser.add_argument(
@@ -176,6 +176,8 @@ from isaaclab.scene import InteractiveScene
 ##
 if args_cli.robot == "rpo":
     from robolab.assets.robots.roboparty import RPO_CFG as ROBOT_CFG
+elif args_cli.robot == "v1_1_29dof":
+    from robolab.assets.robots.v1_1_29dof import V1_1_29DOF_CFG as ROBOT_CFG
 else:
     raise ValueError(f"Robot {args_cli.robot} not supported.")
 
@@ -238,15 +240,16 @@ if __name__ == "__main__":
     motion_data_dicts = run_simulator(simulation_app, sim, scene, motion_data_dicts, lab_key_body_names)
     
     motion_data_dict = motion_data_dicts[0]
-    
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     print("💾 SAVING CONVERTED DATA")
-    print("="*60)
+    print("=" * 60)
     print(f"📁 Output File: {args_cli.output_file}")
     print(f"🧮 Number of Frames: {args_cli.frame_range[1] - args_cli.frame_range[0] if args_cli.frame_range else 'All'}")
     print(f"🔁 Loop Mode: {loop_mode.name}")
-    print("="*60 + "\n")
-    
+    print("=" * 60 + "\n")
+
+    Path(args_cli.output_file).parent.mkdir(parents=True, exist_ok=True)
     with open(args_cli.output_file, 'wb') as f:
         pickle.dump(motion_data_dict, f)
     print("✅ Data saved successfully.")
