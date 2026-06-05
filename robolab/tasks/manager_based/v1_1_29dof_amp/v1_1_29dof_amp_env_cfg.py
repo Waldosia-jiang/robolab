@@ -159,30 +159,13 @@ class v1_1_29dof_AmpEnvCfg(AmpEnvCfg):
         self.motion_data.motion_dataset.motion_data_dir = os.path.join(
             ROBOLAB_ROOT_DIR, "data", "motions", "v1_1_29dof_lab"
         )
-        self.motion_data.motion_dataset.motion_data_weights={
-            
-            # CMU
-            "127_04": 1, # walk to run
-            "127_06": 1, # run 
-            
-            #ACCAD
-            "A1-_Stand_stageii": 1,
-            
-            "B9_-__Walk_turn_left_90_stageii":1,
-            "B10_-__Walk_turn_left_45_stageii":1,
-            "B13_-__Walk_turn_right_90_stageii":1,
-            "B14_-__Walk_turn_right_45_t2_stageii":1,
-            "B15_-__Walk_turn_around_stageii":1,
-            
-            "C12_-_run_turn_left_45_stageii":1,
-            "C17_-_run_change_direction_stageii":1,
-            
-            # GVHMR
-            "move_back":1,
-            "move_l":1,
-            "move_r":1,
-            "turn_l":1,
-            "turn_r":1,
+        self.motion_data.motion_dataset.motion_data_weights = {
+            "Forward_backward_02": 1,
+            "Forward_backward_04": 1,
+            "Left_right01": 1,
+            "Turn_45_01": 1,
+            "Turn_90_02": 1,
+            "walk2": 1,
         }
         
         # ------------------------------------------------------
