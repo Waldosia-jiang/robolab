@@ -34,7 +34,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
-import robolab.tasks.manager_based.amp.mdp as mdp
+import robolab.tasks.manager_based.v1_1_29dof_amp.mdp as mdp
 from robolab.tasks.manager_based.amp.managers import MotionDataTermCfg
 from robolab.tasks.manager_based.amp.amp_env_cfg import AmpEnvCfg, MotionDataCfg
 

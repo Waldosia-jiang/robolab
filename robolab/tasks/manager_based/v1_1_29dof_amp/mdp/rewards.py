@@ -46,18 +46,19 @@ if TYPE_CHECKING:
     
     
 def track_lin_vel_xy_exp(
-    env: ManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+    env: ManagerBasedRLEnv,
+    std: float,
+    command_name: str,
+    std_y: float | None = None,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
     """Reward tracking of linear velocity commands (xy axes) using exponential kernel."""
-    # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
-    # compute the error
-    lin_vel_error = torch.sum(
-        torch.square(env.command_manager.get_command(command_name)[:, :2] - asset.data.root_lin_vel_b[:, :2]),
-        dim=1,
-    )
-    # return torch.exp(-lin_vel_error / std**2)
-    reward = torch.exp(-lin_vel_error / std**2)
+    cmd = env.command_manager.get_command(command_name)
+    vel_error = cmd[:, :2] - asset.data.root_lin_vel_b[:, :2]
+    std_y_eff = std if std_y is None else std_y
+    lin_vel_error = torch.square(vel_error[:, 0]) / (std**2) + torch.square(vel_error[:, 1]) / (std_y_eff**2)
+    reward = torch.exp(-lin_vel_error)
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
