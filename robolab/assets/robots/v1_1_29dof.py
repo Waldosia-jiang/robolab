@@ -32,7 +32,6 @@
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import DelayedPDActuatorCfg
-from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
 from robolab.assets import ISAAC_DATA_DIR
@@ -93,7 +92,7 @@ V1_1_29DOF_CFG = ArticulationCfg(
     ),
     soft_joint_pos_limit_factor=0.90,
     actuators={
-        "legs": ImplicitActuatorCfg(
+        "legs": DelayedPDActuatorCfg(
             joint_names_expr=[
                 ".*_hip_pitch_joint",
                 ".*_hip_roll_joint",
@@ -135,8 +134,10 @@ V1_1_29DOF_CFG = ArticulationCfg(
                 ".*_ankle_roll_joint": 3.0,
             },
             armature=0.01,
+            min_delay=0,
+            max_delay=2,
         ),
-        "waist": ImplicitActuatorCfg(
+        "waist": DelayedPDActuatorCfg(
             joint_names_expr=[
                 ".*waist_pitch_joint",
                 ".*waist_roll_joint",
@@ -163,8 +164,10 @@ V1_1_29DOF_CFG = ArticulationCfg(
                 ".*waist_pitch_joint": 5.0,
             },
             armature=0.01,
+            min_delay=0,
+            max_delay=2,
         ),
-        "arms": ImplicitActuatorCfg(
+        "arms": DelayedPDActuatorCfg(
             joint_names_expr=[
                 ".*_shoulder_pitch_joint",
                 ".*_shoulder_roll_joint",
@@ -196,8 +199,10 @@ V1_1_29DOF_CFG = ArticulationCfg(
                 ".*_elbow_joint": 1.5,
             },
             armature=0.01,
+            min_delay=0,
+            max_delay=2,
         ),
-        "wrist": ImplicitActuatorCfg(
+        "wrist": DelayedPDActuatorCfg(
             joint_names_expr=[
                 ".*_wrist_roll_joint",
                 ".*_wrist_pitch_joint",
@@ -220,6 +225,8 @@ V1_1_29DOF_CFG = ArticulationCfg(
             },
             damping=2,
             armature=0.01,
+            min_delay=0,
+            max_delay=2,
         ),
     },
 )
