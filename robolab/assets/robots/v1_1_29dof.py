@@ -76,18 +76,6 @@ V1_1_29DOF_CFG = ArticulationCfg(
             "left_wrist_roll_joint": 0.15,
             "right_wrist_roll_joint": -0.15,
         },
-        # joint_pos={
-            # ".*_hip_pitch_joint": -0.1,
-            # ".*_knee_joint": 0.24,
-            # ".*_ankle_pitch_joint": -0.14,
-            # ".*_elbow_joint": 0.87,
-            # "left_shoulder_roll_joint": 0.18,
-            # "right_shoulder_roll_joint": -0.18,
-            # ".*_shoulder_pitch_joint": 0.35,
-            # "left_wrist_roll_joint": 0.15,
-            # "right_wrist_roll_joint": -0.15,
-
-        # },
         joint_vel={".*": 0.0},
     ),
     soft_joint_pos_limit_factor=0.90,
@@ -135,7 +123,7 @@ V1_1_29DOF_CFG = ArticulationCfg(
             },
             armature=0.01,
             min_delay=0,
-            max_delay=2,
+            max_delay=0,
         ),
         "waist": DelayedPDActuatorCfg(
             joint_names_expr=[
@@ -165,7 +153,7 @@ V1_1_29DOF_CFG = ArticulationCfg(
             },
             armature=0.01,
             min_delay=0,
-            max_delay=2,
+            max_delay=0,
         ),
         "arms": DelayedPDActuatorCfg(
             joint_names_expr=[
@@ -200,7 +188,7 @@ V1_1_29DOF_CFG = ArticulationCfg(
             },
             armature=0.01,
             min_delay=0,
-            max_delay=2,
+            max_delay=0,
         ),
         "wrist": DelayedPDActuatorCfg(
             joint_names_expr=[
@@ -226,7 +214,7 @@ V1_1_29DOF_CFG = ArticulationCfg(
             damping=2,
             armature=0.01,
             min_delay=0,
-            max_delay=2,
+            max_delay=0,
         ),
     },
 )

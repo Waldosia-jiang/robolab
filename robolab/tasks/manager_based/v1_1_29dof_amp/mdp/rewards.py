@@ -331,6 +331,14 @@ def upward(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("r
     return reward
 
 
+def link_orientation(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize non-flat link orientation using L2 squared kernel."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    link_quat = asset.data.body_quat_w[:, asset_cfg.body_ids[0], :]
+    link_projected_gravity = math_utils.quat_apply_inverse(link_quat, asset.data.GRAVITY_VEC_W)
+    return torch.sum(torch.square(link_projected_gravity[:, :2]), dim=1)
+
+
 def sound_suppression_acc_per_foot(
     env: ManagerBasedRLEnv,
     sensor_cfg: SceneEntityCfg,

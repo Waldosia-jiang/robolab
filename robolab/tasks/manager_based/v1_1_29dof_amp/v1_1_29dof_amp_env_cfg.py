@@ -156,6 +156,8 @@ class v1_1_29dof_AmpEnvCfg(AmpEnvCfg):
         # ------------------------------------------------------
         # motion data
         # ------------------------------------------------------
+        # 当前 6 条行走/转向动作（最高 ~1.01 m/s）。补充高速动作后可通过
+        # scripts/tools/retarget/ 写入同目录并在此处增加 motion_data_weights 条目。
         self.motion_data.motion_dataset.motion_data_dir = os.path.join(
             ROBOLAB_ROOT_DIR, "data", "motions", "v1_1_29dof_lab"
         )
@@ -227,8 +229,9 @@ class v1_1_29dof_AmpEnvCfg(AmpEnvCfg):
         # ------------------------------------------------------
         # Commands
         # ------------------------------------------------------
-        
-        self.commands.base_velocity.ranges.lin_vel_x = (-0.5, 2.5)
+        # v1_1 动作库最快约 1.01 m/s（walk2），上限设为 1.0 避免超出 AMP 参考动作覆盖范围。
+        # RPO-AMP 使用 (-0.5, 2.5) 因其含跑步动作（最高 ~4 m/s）。
+        self.commands.base_velocity.ranges.lin_vel_x = (-0.5, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.5, 1.5)
                 
